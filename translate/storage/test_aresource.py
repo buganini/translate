@@ -13,7 +13,14 @@ class TestAndroidResourceUnit(test_monolingual.TestMonolingualUnit):
 
     def __check_escape(self, string, xml, target_language=None):
         """Helper that checks that a string is output with the right escape."""
-        unit = self.UnitClass("Test String")
+
+        parser = etree.XMLParser(strip_cdata=False)
+
+        et_orig = etree.fromstring(xml, parser)
+        unit_orig = self.UnitClass.createfromxmlElement(et_orig)
+
+        et = etree.fromstring(xml, parser)
+        unit = self.UnitClass.createfromxmlElement(et)
 
         if (target_language is not None):
             store = TranslationStore()
@@ -22,10 +29,10 @@ class TestAndroidResourceUnit(test_monolingual.TestMonolingualUnit):
 
         unit.target = string
 
-        print("unit.target:", repr(unit.target))
-        print("xml:", repr(xml))
+        print("unit_orig:", repr(unit_orig.xmlelement.text))
+        print("unit:", repr(unit.xmlelement.text))
 
-        assert str(unit) == xml
+        assert (unit.xmlelement.text or "") == (unit_orig.xmlelement.text or "")
 
     def __check_parse(self, string, xml):
         """Helper that checks that a string is parsed correctly."""
@@ -120,6 +127,14 @@ class TestAndroidResourceUnit(test_monolingual.TestMonolingualUnit):
                  '<item quantity="one">one message\\nwith newline</item>\n\t'
                  '<item quantity="other">other message\\nwith newline</item>\n'
                '</plurals>\n')
+        self.__check_escape(mString, xml, 'en')
+
+    def test_string_array_escape_message_with_newline(self):
+        mString = multistring(['one message\nwith newline', 'other message\nwith newline'])
+        xml = ('<string-array name="Test String">\n\t'
+                 '<item>one message\\nwith newline</item>\n\t'
+                 '<item>other message\\nwith newline</item>\n'
+               '</string-array>\n')
         self.__check_escape(mString, xml, 'en')
 
     ############################ Check string parse ###########################
@@ -220,6 +235,14 @@ class TestAndroidResourceUnit(test_monolingual.TestMonolingualUnit):
                  '<item quantity="one">one message\\nwith newline</item>\n\t'
                  '<item quantity="other">other message\\nwith newline</item>\n'
                '</plurals>\n')
+        self.__check_parse(mString, xml)
+
+    def test_string_array_parse_message_with_newline(self):
+        mString = multistring(['one message\nwith newline', 'other message\nwith newline'])
+        xml = ('<string-array name="Test String">\n\t'
+                 '<item>one message\\nwith newline</item>\n\t'
+                 '<item>other message\\nwith newline</item>\n'
+               '</string-array>\n')
         self.__check_parse(mString, xml)
 
 

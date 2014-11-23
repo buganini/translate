@@ -43,8 +43,7 @@ class AndroidResourceUnit(base.TranslationUnit):
     @classmethod
     def createfromxmlElement(cls, element):
         term = None
-        # Actually this class supports only plurals and string tags
-        if ((element.tag == "plurals") or (element.tag == "string")):
+        if element.tag in ("string", "plurals", "string-array"):
             term = cls(None, xmlelement=element)
         return term
 
@@ -52,13 +51,8 @@ class AndroidResourceUnit(base.TranslationUnit):
         if xmlelement is not None:
             self.xmlelement = xmlelement
         else:
-            if self.hasplurals(source):
-                self.xmlelement = etree.Element("plurals")
-            else:
-                self.xmlelement = etree.Element("string")
+            self.xmlelement = etree.Element("TranslationUnit")
             self.xmlelement.tail = '\n'
-        if source is not None:
-            self.setid(source)
         super(AndroidResourceUnit, self).__init__(source)
 
     def istranslatable(self):
@@ -71,10 +65,24 @@ class AndroidResourceUnit(base.TranslationUnit):
         return not bool(self.getid())
 
     def getid(self):
-        return self.xmlelement.get("name")
+        prefix = self.xmlelement.tag
+        if self.xmlelement.tag == "plurals":
+            quantities = []
+            for entry in self.xmlelement.iterchildren():
+                quantities.append(entry.get("quantity"))
+            prefix += "_" + ",".join(quantities)
+        name = self.xmlelement.get("name")
+        if not name:
+            name = ""
+        return prefix + "_" + name
 
     def setid(self, newid):
+        tag, newid = newid.split("_", 1)
+        if tag == "plurals":
+            quantities, newid = newid.split("_", 1)
+        self.xmlelement = etree.Element(tag)
         return self.xmlelement.set("name", newid)
+
 
     def getcontext(self):
         return self.xmlelement.get("name")
@@ -286,19 +294,18 @@ class AndroidResourceUnit(base.TranslationUnit):
             xmltarget.text = self.escape(target)
 
     def settarget(self, target):
-        if (self.hasplurals(self.source) or self.hasplurals(target)):
+        if self.xmlelement.tag == "plurals" or (hasattr(target, "xmlelement") and target.xmlelement.getid().startswith("plurals")):
             # Fix the root tag if mismatching
-            if self.xmlelement.tag != "plurals":
-                old_id = self.getid()
+            if self.xmlelement.tag == "plurals":
+                uid = self.getid()
+            else:
+                uid = target.getid()
                 self.xmlelement = etree.Element("plurals")
-                self.setid(old_id)
+                self.setid(uid)
 
-            lang_tags = set(Locale(self.gettargetlanguage()).plural_form.tags)
-            # Ensure that the implicit default "other" rule is present (usually omitted by Babel)
-            lang_tags.add('other')
-
-            # Get plural tags in the right order.
-            plural_tags = [tag for tag in ['zero', 'one', 'two', 'few', 'many', 'other'] if tag in lang_tags]
+            prefix, sid = uid.split("_", 1)
+            plural_tags, sid = sid.split("_", 1)
+            plural_tags = plural_tags.split(",")
 
             # Get string list to handle, wrapping non multistring/list targets into a list.
             if isinstance(target, multistring):
@@ -327,6 +334,36 @@ class AndroidResourceUnit(base.TranslationUnit):
                 self.xmlelement.append(item)
             # Remove the tab from last item
             item.tail = "\n"
+        elif self.xmlelement.tag == "string-array" or (hasattr(target, "xmlelement") and target.xmlelement.getid().startswith("string-array")):
+            # Fix the root tag if mismatching
+            if self.xmlelement.tag == "string-array":
+                uid = self.getid()
+            else:
+                uid = target.getid()
+                self.xmlelement = etree.Element("string-array")
+                self.setid(uid)
+
+            # Get string list to handle, wrapping non multistring/list targets into a list.
+            if isinstance(target, multistring):
+                array_strings = target.strings
+            elif isinstance(target, list):
+                array_strings = target
+            else:
+                array_strings = [target]
+
+            # Rebuild array.
+            for entry in self.xmlelement.iterchildren():
+                self.xmlelement.remove(entry)
+
+            self.xmlelement.text = "\n\t"
+
+            for array_string in array_strings:
+                item = etree.Element("item")
+                self.set_xml_text_value(array_string, item)
+                item.tail = "\n\t"
+                self.xmlelement.append(item)
+            # Remove the tab from last item
+            item.tail = "\n"
         else:
             # Fix the root tag if mismatching
             if self.xmlelement.tag != "string":
@@ -346,7 +383,7 @@ class AndroidResourceUnit(base.TranslationUnit):
         return target
 
     def gettarget(self, lang=None):
-        if (self.xmlelement.tag == "plurals"):
+        if self.xmlelement.tag in ("plurals", "string-array"):
             target = []
             for entry in self.xmlelement.iterchildren():
                 target.append(self.get_xml_text_value(entry))
@@ -395,13 +432,6 @@ class AndroidResourceUnit(base.TranslationUnit):
 
     def __eq__(self, other):
         return (str(self) == str(other))
-
-    def hasplurals(self, thing):
-        if isinstance(thing, multistring):
-            return True
-        elif isinstance(thing, list):
-            return True
-        return False
 
 
 class AndroidResourceFile(lisa.LISAfile):
