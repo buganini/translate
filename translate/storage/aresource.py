@@ -85,7 +85,7 @@ class AndroidResourceUnit(base.TranslationUnit):
 
 
     def getcontext(self):
-        return self.xmlelement.get("name")
+        return self.getid()
 
     @staticmethod
     def unescape(text):
