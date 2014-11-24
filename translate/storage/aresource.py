@@ -51,8 +51,10 @@ class AndroidResourceUnit(base.TranslationUnit):
         if xmlelement is not None:
             self.xmlelement = xmlelement
         else:
-            self.xmlelement = etree.Element("TranslationUnit")
+            self.xmlelement = etree.Element("string")
             self.xmlelement.tail = '\n'
+            if source is not None:
+                self.xmlelement.set("name", source)
         super(AndroidResourceUnit, self).__init__(source)
 
     def istranslatable(self):
