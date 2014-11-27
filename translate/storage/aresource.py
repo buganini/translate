@@ -67,22 +67,21 @@ class AndroidResourceUnit(base.TranslationUnit):
         return not bool(self.getid())
 
     def getid(self):
-        prefix = self.xmlelement.tag
+        prefix = {"string":"string", "plurals":"plurals", "string-array":"array"}[self.xmlelement.tag]
         if self.xmlelement.tag == "plurals":
             quantities = []
             for entry in self.xmlelement.iterchildren():
                 quantities.append(entry.get("quantity"))
-            prefix += "_" + ",".join(quantities)
+            prefix += "@"+",".join(quantities)
         name = self.xmlelement.get("name")
         if not name:
             name = ""
-        return prefix + "_" + name
+        return prefix + "\x1f\x1f" + name
 
     def setid(self, newid):
-        tag, newid = newid.split("_", 1)
-        if tag == "plurals":
-            quantities, newid = newid.split("_", 1)
-        self.xmlelement = etree.Element(tag)
+        tag, newid = newid.split("\x1f\x1f", 1)
+        tag = tag.split("@")[0]
+        self.xmlelement = etree.Element({"string":"string", "plurals":"plurals", "array":"string-array"}[tag])
         return self.xmlelement.set("name", newid)
 
 
@@ -305,9 +304,11 @@ class AndroidResourceUnit(base.TranslationUnit):
                 self.xmlelement = etree.Element("plurals")
                 self.setid(uid)
 
-            prefix, sid = uid.split("_", 1)
-            plural_tags, sid = sid.split("_", 1)
-            plural_tags = plural_tags.split(",")
+            tag, sid = uid.split("\x1f\x1f", 1)
+            tag = tag.split("@", 1)
+            if len(tag)>1:
+                plural_tags = tag[1].split(",")
+            tag = tag[0]
 
             # Get string list to handle, wrapping non multistring/list targets into a list.
             if isinstance(target, multistring):
