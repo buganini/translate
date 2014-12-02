@@ -67,12 +67,7 @@ class AndroidResourceUnit(base.TranslationUnit):
         return not bool(self.getid())
 
     def getid(self):
-        prefix = {"string":"string", "plurals":"plurals", "string-array":"array"}[self.xmlelement.tag]
-        if self.xmlelement.tag == "plurals":
-            quantities = []
-            for entry in self.xmlelement.iterchildren():
-                quantities.append(entry.get("quantity"))
-            prefix += "@"+",".join(quantities)
+        prefix = {"string-array":"array"}.get(self.xmlelement.tag, self.xmlelement.tag)
         name = self.xmlelement.get("name")
         if not name:
             name = ""
@@ -80,8 +75,7 @@ class AndroidResourceUnit(base.TranslationUnit):
 
     def setid(self, newid):
         tag, newid = newid.split("\x1f\x1f", 1)
-        tag = tag.split("@")[0]
-        self.xmlelement = etree.Element({"string":"string", "plurals":"plurals", "array":"string-array"}[tag])
+        self.xmlelement = etree.Element({"array":"string-array"}.get(tag, tag))
         return self.xmlelement.set("name", newid)
 
 
@@ -304,11 +298,12 @@ class AndroidResourceUnit(base.TranslationUnit):
                 self.xmlelement = etree.Element("plurals")
                 self.setid(uid)
 
-            tag, sid = uid.split("\x1f\x1f", 1)
-            tag = tag.split("@", 1)
-            if len(tag)>1:
-                plural_tags = tag[1].split(",")
-            tag = tag[0]
+            lang_tags = set(Locale(self.gettargetlanguage()).plural_form.tags)
+            # Ensure that the implicit default "other" rule is present (usually omitted by Babel)
+            lang_tags.add('other')
+
+            # Get plural tags in the right order.
+            plural_tags = [tag for tag in ['zero', 'one', 'two', 'few', 'many', 'other'] if tag in lang_tags]
 
             # Get string list to handle, wrapping non multistring/list targets into a list.
             if isinstance(target, multistring):
